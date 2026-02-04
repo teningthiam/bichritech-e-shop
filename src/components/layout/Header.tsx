@@ -34,7 +34,7 @@ export function Header() {
           <span className="hidden sm:block">📍 Livraison partout au Sénégal</span>
           <span className="sm:hidden">🇸🇳 BichriTech</span>
           <div className="flex items-center gap-4">
-            <span>📞 +221 77 123 45 67</span>
+            <span>📞 +221 78 276 56 39</span>
             <span className="hidden md:block">💳 Wave, Orange Money, Free Money</span>
           </div>
         </div>
