@@ -24,62 +24,29 @@
    status: "PENDING" | "COMPLETED" | "FAILED";
  }
  
- // Wave Payment Integration
- // Documentation: https://developer.wave.com
- async function processWavePayment(request: PaymentRequest): Promise<PaymentResponse> {
-   const WAVE_API_KEY = Deno.env.get("WAVE_API_KEY");
-   const WAVE_MERCHANT_ID = Deno.env.get("WAVE_MERCHANT_ID");
-   
-   if (!WAVE_API_KEY || !WAVE_MERCHANT_ID) {
-     console.log("Wave API keys not configured - simulating payment");
-     // Simulation mode when keys are not configured
-     return {
-       success: true,
-       transactionId: `WAVE_SIM_${Date.now()}`,
-       message: "Paiement Wave simulé - En attente de configuration API",
-       status: "PENDING",
-     };
-   }
- 
-   try {
-     // Real Wave API call
-     const response = await fetch("https://api.wave.com/v1/checkout/sessions", {
-       method: "POST",
-       headers: {
-         "Authorization": `Bearer ${WAVE_API_KEY}`,
-         "Content-Type": "application/json",
-       },
-       body: JSON.stringify({
-         amount: request.amount,
-         currency: "XOF",
-         error_url: `${Deno.env.get("SITE_URL") || "https://bichri-tech.lovable.app"}/checkout?error=true`,
-         success_url: `${Deno.env.get("SITE_URL") || "https://bichri-tech.lovable.app"}/order-success?order=${request.orderNumber}`,
-         client_reference: request.orderNumber,
-       }),
-     });
- 
-     const data = await response.json();
-     
-     if (response.ok && data.wave_launch_url) {
-       return {
-         success: true,
-         transactionId: data.id,
-         paymentUrl: data.wave_launch_url,
-         message: "Redirection vers Wave",
-         status: "PENDING",
-       };
-     } else {
-       throw new Error(data.message || "Erreur Wave API");
-     }
-   } catch (error) {
-     console.error("Wave payment error:", error);
-     return {
-       success: false,
-       message: `Erreur Wave: ${error instanceof Error ? error.message : "Erreur inconnue"}`,
-       status: "FAILED",
-     };
-   }
- }
+// Wave Payment Integration
+// Using Wave Payment Link: https://pay.wave.com/m/M_sn_ErkbAl16QBPm/c/sn/
+const WAVE_PAYMENT_LINK = "https://pay.wave.com/m/M_sn_ErkbAl16QBPm/c/sn/";
+
+function processWavePayment(request: PaymentRequest): PaymentResponse {
+  // Wave Payment Link with amount parameter
+  // The link format supports adding amount as query parameter
+  const paymentUrl = `${WAVE_PAYMENT_LINK}?amount=${request.amount}`;
+  
+  console.log("Wave payment initiated:", {
+    orderNumber: request.orderNumber,
+    amount: request.amount,
+    paymentUrl: paymentUrl
+  });
+
+  return {
+    success: true,
+    transactionId: `WAVE_${request.orderNumber}_${Date.now()}`,
+    paymentUrl: paymentUrl,
+    message: "Redirection vers Wave pour le paiement",
+    status: "PENDING",
+  };
+}
  
  // Orange Money Payment Integration
  // Documentation: https://developer.orange.com/apis/om-webpay
@@ -237,9 +204,9 @@
      let result: PaymentResponse;
  
      switch (paymentRequest.paymentMethod) {
-       case "WAVE":
-         result = await processWavePayment(paymentRequest);
-         break;
+      case "WAVE":
+        result = processWavePayment(paymentRequest);
+        break;
        case "ORANGE_MONEY":
          result = await processOrangeMoneyPayment(paymentRequest);
          break;
