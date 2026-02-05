@@ -1,9 +1,12 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle, ShoppingBag, Home } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 
 export default function OrderSuccess() {
+  const [searchParams] = useSearchParams();
+  const orderNumber = searchParams.get('order');
+
   return (
     <Layout>
       <div className="container-main py-16">
@@ -15,6 +18,12 @@ export default function OrderSuccess() {
           <h1 className="font-display text-3xl font-bold mb-4">
             Commande confirmée ! 🎉
           </h1>
+
+          {orderNumber && (
+            <p className="text-lg font-semibold text-primary mb-4">
+              N° de commande : {orderNumber}
+            </p>
+          )}
 
           <p className="text-muted-foreground mb-8">
             Merci pour votre commande ! Vous recevrez bientôt un SMS avec les détails 

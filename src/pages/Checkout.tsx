@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CreditCard, Truck, Check } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { formatPrice } from '@/lib/formatters';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import type { PaymentMethod } from '@/types';
 
 const paymentMethods = [
@@ -35,9 +36,13 @@ const cities = [
 
 export default function Checkout() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { cart, clearCart } = useCart();
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
+
+  // Check for payment error from redirect
+  const hasPaymentError = searchParams.get('error') === 'true';
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -58,6 +63,15 @@ export default function Checkout() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Show error toast if redirected back with error
+  if (hasPaymentError) {
+    toast({
+      title: 'Erreur de paiement',
+      description: 'Le paiement a échoué. Veuillez réessayer.',
+      variant: 'destructive',
+    });
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -72,17 +86,70 @@ export default function Checkout() {
 
     setIsSubmitting(true);
 
-    // Simulate order creation
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      // Get auth token if logged in
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Create order via edge function
+      const response = await supabase.functions.invoke('create-order', {
+        body: {
+          items: cart.items.map(item => ({
+            productId: item.productId,
+            productName: item.productName,
+            productBrand: item.productBrand,
+            productImageUrl: item.productImageUrl,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            subtotal: item.subtotal,
+          })),
+          subtotal: cart.totalAmount,
+          deliveryFee: deliveryFee,
+          totalAmount: finalTotal,
+          paymentMethod: formData.paymentMethod,
+          deliveryFirstName: formData.firstName,
+          deliveryLastName: formData.lastName,
+          deliveryPhone: formData.phone,
+          deliveryAddress: formData.address,
+          deliveryCity: formData.city,
+          deliveryRegion: formData.region || null,
+          deliveryNotes: formData.notes || null,
+        },
+      });
 
-    clearCart();
-    toast({
-      title: 'Commande confirmée ! 🎉',
-      description: 'Vous recevrez un SMS avec les détails de votre commande',
-    });
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
 
-    navigate('/order-success');
-    setIsSubmitting(false);
+      const result = response.data;
+
+      if (!result.success) {
+        throw new Error(result.message || 'Erreur lors de la création de la commande');
+      }
+
+      // If payment requires redirect (Wave, Orange Money, Free Money)
+      if (result.payment?.paymentUrl) {
+        window.location.href = result.payment.paymentUrl;
+        return;
+      }
+
+      // For cash on delivery or simulated payments, redirect to success
+      clearCart();
+      toast({
+        title: 'Commande confirmée ! 🎉',
+        description: 'Vous recevrez un SMS avec les détails de votre commande',
+      });
+
+      navigate(`/order-success?order=${result.order.orderNumber}`);
+    } catch (error) {
+      console.error('Order creation error:', error);
+      toast({
+        title: 'Erreur',
+        description: error instanceof Error ? error.message : 'Une erreur est survenue',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (cart.items.length === 0) {
