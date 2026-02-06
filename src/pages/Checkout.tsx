@@ -121,18 +121,27 @@ export default function Checkout() {
       }
 
       const result = response.data;
+      console.log('Order result:', result);
 
       if (!result.success) {
         throw new Error(result.message || 'Erreur lors de la création de la commande');
       }
 
       // If payment requires redirect (Wave, Orange Money, Free Money)
-      if (result.payment?.paymentUrl) {
-        window.location.href = result.payment.paymentUrl;
+      if (result.payment && result.payment.paymentUrl) {
+        console.log('Redirecting to payment URL:', result.payment.paymentUrl);
+        // Clear cart before redirect
+        clearCart();
+        // Open payment URL - use window.open as fallback for iframe restrictions
+        const paymentWindow = window.open(result.payment.paymentUrl, '_blank');
+        if (!paymentWindow) {
+          // If popup blocked, try direct redirect
+          window.location.href = result.payment.paymentUrl;
+        }
         return;
       }
 
-      // For cash on delivery or simulated payments, redirect to success
+      // For cash on delivery, redirect to success
       clearCart();
       toast({
         title: 'Commande confirmée ! 🎉',
